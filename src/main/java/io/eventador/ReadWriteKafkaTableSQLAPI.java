@@ -28,22 +28,23 @@ public class ReadWriteKafkaTableSQLAPI {
         Properties kparams = params.getProperties();
         kparams.setProperty("auto.offset.reset", "earliest");
         kparams.setProperty("flink.starting-position", "earliest");
-        kparams.setProperty("group.id", UUID.randomUUID().toString());
 
         // setup streaming environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000));
-        env.enableCheckpointing(300000); // 300 seconds
+        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 3000));
+        env.enableCheckpointing(15000); // 300 seconds
         env.getConfig().setGlobalJobParameters(params);
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1);
 
-        StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
+        StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
 
         tableEnv.connect(new Kafka()
-                .version("0.11")
+                .version("universal")
                 .topic(params.getRequired("read-topic"))
-                .property("bootstrap.servers", params.getRequired("bootstrap.servers")))
+
+                .property("bootstrap.servers", params.getRequired("bootstrap.servers"))
+                .property("group.id", params.getRequired("group.id")))
                 .withSchema(new Schema()
                         .field("sensor", Types.STRING())
                         .field("temp", Types.LONG())
@@ -58,9 +59,10 @@ public class ReadWriteKafkaTableSQLAPI {
                 .registerTableSource("sourceTopic");
 
         tableEnv.connect(new Kafka()
-                .version("0.11")
+                .version("universal")
                 .topic(params.getRequired("write-topic"))
                 .property("bootstrap.servers", params.getRequired("bootstrap.servers"))
+                .property("group.id", params.getRequired("group.id"))
                 .sinkPartitionerRoundRobin())
                 .withSchema(new Schema()
                         .field("sensor", Types.STRING())
